@@ -2,8 +2,7 @@
 
 /**
  * drawCube builds the necessary buffers for a cube (composed of triangles)
- * and draws it. It assumes that the shader program is in use and that the
- * uniforms u_ModelMatrix and u_GlobalRotation are already set.
+ * and draws it.
  *
  * @param {WebGLRenderingContext} gl - The WebGL context.
  * @param {WebGLProgram} program - The shader program (which uses attributes a_Position and a_Color).

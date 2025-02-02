@@ -1,8 +1,7 @@
 // BlockyAnimal.js
 
+// Global variables for camera controls, leg joints, tail joints, head shake, and mouth animation.
 var gl, program, canvas;
-var gAnimalGlobalRotation = 0;    // Object Y rotation (degrees)
-var gAnimalGlobalRotationX = 0;   // Object X rotation (degrees)
 var gCameraZoom = 12;             // Camera distance
 var gCameraAzimuth = 0;           // Camera azimuth (degrees)
 var gCameraElevation = 0;         // Camera elevation (degrees)
@@ -23,16 +22,16 @@ var gHeadShakeAngle = 0;
 
 // Mouth animation variables.
 var mouthAnimationOn = false;
-var gMouthOpenAmount = 0; // Ranges from 0 (closed) to 1 (fully open)
+var gMouthOpenAmount = 0; // 0 (closed) to 1 (fully open)
 
 // Running animation control.
 var runAnimationOn = false;
 
 // Animation constants.
-var tailWagFrequency = 2;
-var tailWagAmplitude1 = 30;
-var tailWagAmplitude2 = 20;
-var tailWagAmplitude3 = 10;
+var tailWagFrequency = 2;          // cycles per second for tail wag
+var tailWagAmplitude1 = 30;        // degrees for tail joint 1
+var tailWagAmplitude2 = 20;        // degrees for tail joint 2
+var tailWagAmplitude3 = 10;        // degrees for tail joint 3
 var tailWagPhase2 = Math.PI / 4;
 var tailWagPhase3 = Math.PI / 2;
 
@@ -46,8 +45,12 @@ var backRightLegPhase = 0;
 var headShakeFrequency = 2;
 var headShakeAmplitude = 10;
 
-// Mouth animation frequency (open/close every ~3 seconds)
-var mouthFrequency = 0.33; // cycles per second
+var mouthFrequency = 0.33; // cycles per second for mouth open/close
+
+// For mouse dragging to rotate camera.
+var isDragging = false;
+var lastMouseX = 0;
+var lastMouseY = 0;
 
 const vertexShaderSource = `
     attribute vec4 a_Position;
@@ -95,10 +98,18 @@ function createProgram(gl, vShaderSource, fShaderSource) {
     return program;
 }
 
+// Global variable for FPS timing.
+var lastTime = performance.now();
+
 function tick() {
-    var t = performance.now() / 1000;
+    var currentTime = performance.now();
+    var deltaTime = currentTime - lastTime;
+    var fps = 1000 / deltaTime;
+    lastTime = currentTime;
+    document.getElementById("fpsIndicator").textContent = "FPS: " + fps.toFixed(1);
+    
     if (runAnimationOn) {
-        // Running animation: update tail, leg, and head shake.
+        var t = currentTime / 1000;
         gTailJointAngle1 = tailWagAmplitude1 * Math.sin(2 * Math.PI * tailWagFrequency * t);
         gTailJointAngle2 = tailWagAmplitude2 * Math.sin(2 * Math.PI * tailWagFrequency * t + tailWagPhase2);
         gTailJointAngle3 = tailWagAmplitude3 * Math.sin(2 * Math.PI * tailWagFrequency * t + tailWagPhase3);
@@ -109,10 +120,12 @@ function tick() {
         gHeadShakeAngle = headShakeAmplitude * Math.sin(2 * Math.PI * headShakeFrequency * t);
     }
     if (mouthAnimationOn) {
+        var t = currentTime / 1000;
         gMouthOpenAmount = (Math.sin(2 * Math.PI * mouthFrequency * t) + 1) / 2;
     } else {
         gMouthOpenAmount = 0;
     }
+    
     renderSkink();
     requestAnimationFrame(tick);
 }
@@ -135,14 +148,6 @@ function main() {
     gl.useProgram(program);
     
     // Register slider events.
-    document.getElementById("rotationSliderY").addEventListener("input", function () {
-        gAnimalGlobalRotation = Number(this.value);
-        renderSkink();
-    });
-    document.getElementById("rotationSliderX").addEventListener("input", function () {
-        gAnimalGlobalRotationX = Number(this.value);
-        renderSkink();
-    });
     document.getElementById("zoomSlider").addEventListener("input", function () {
         gCameraZoom = Number(this.value);
         renderSkink();
@@ -155,7 +160,6 @@ function main() {
         gCameraElevation = Number(this.value);
         renderSkink();
     });
-    // Leg joint sliders.
     document.getElementById("frontLeftLegSlider").addEventListener("input", function () {
         gFrontLeftLegJointAngle = Number(this.value);
         renderSkink();
@@ -172,7 +176,6 @@ function main() {
         gBackRightLegJointAngle = Number(this.value);
         renderSkink();
     });
-    // Tail joint sliders.
     document.getElementById("tailJointSlider1").addEventListener("input", function () {
         gTailJointAngle1 = Number(this.value);
         renderSkink();
@@ -196,6 +199,47 @@ function main() {
     document.getElementById("mouthButton").addEventListener("click", function () {
         mouthAnimationOn = !mouthAnimationOn;
         this.textContent = mouthAnimationOn ? "Stop Mouth Animation" : "Start Mouth Animation";
+        renderSkink();
+    });
+    
+    // Allow shift-click on the canvas to toggle mouth animation.
+    canvas.addEventListener("click", function (event) {
+        if (event.shiftKey) {
+            mouthAnimationOn = !mouthAnimationOn;
+            var mouthBtn = document.getElementById("mouthButton");
+            mouthBtn.textContent = mouthAnimationOn ? "Stop Mouth Animation" : "Start Mouth Animation";
+            renderSkink();
+        }
+    });
+    
+    // Left-click dragging on the canvas now rotates the camera.
+    canvas.addEventListener("mousedown", function (event) {
+        if (event.button === 0 && !event.shiftKey) {
+            isDragging = true;
+            lastMouseX = event.clientX;
+            lastMouseY = event.clientY;
+        }
+    });
+    canvas.addEventListener("mousemove", function (event) {
+        if (isDragging) {
+            var dx = event.clientX - lastMouseX;
+            var dy = event.clientY - lastMouseY;
+            // Update camera azimuth and elevation.
+            gCameraAzimuth += dx * 0.5;
+            gCameraElevation += dy * 0.5;
+            lastMouseX = event.clientX;
+            lastMouseY = event.clientY;
+            // Update the corresponding sliders.
+            document.getElementById("cameraAzimuthSlider").value = gCameraAzimuth;
+            document.getElementById("cameraElevationSlider").value = gCameraElevation;
+            renderSkink();
+        }
+    });
+    canvas.addEventListener("mouseup", function () {
+        isDragging = false;
+    });
+    canvas.addEventListener("mouseleave", function () {
+        isDragging = false;
     });
     
     renderSkink();
