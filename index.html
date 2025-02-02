@@ -2,14 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Blocky Animal WebGL</title>
+  <title>Blocky Animal WebGL - Skink</title>
   <style>
     canvas {
       display: block;
       margin: 20px auto;
       background-color: black;
     }
-    /* Style for the sliders */
     .slider-container {
       text-align: center;
       margin: 10px auto;
@@ -20,18 +19,25 @@
 <body>
   <canvas id="webgl" width="500" height="500"></canvas>
 
-  <!-- Slider for Y-axis global rotation -->
+  <!-- Slider for Y-axis rotation -->
   <div class="slider-container">
     <label for="rotationSliderY">Y Rotation (°): </label>
     <input type="range" id="rotationSliderY" min="0" max="360" value="0">
   </div>
-  
-  <!-- Slider for X-axis global rotation -->
+
+  <!-- Slider for X-axis rotation -->
   <div class="slider-container">
     <label for="rotationSliderX">X Rotation (°): </label>
     <input type="range" id="rotationSliderX" min="0" max="360" value="0">
   </div>
   
+  <!-- Slider for Camera Zoom -->
+  <div class="slider-container">
+    <label for="zoomSlider">Zoom (Camera Z): </label>
+    <!-- Adjust the range as needed (e.g., 5 to 20) -->
+    <input type="range" id="zoomSlider" min="5" max="20" value="12">
+  </div>
+
   <!-- External library: gl-matrix -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js"></script>
   <!-- Project files -->

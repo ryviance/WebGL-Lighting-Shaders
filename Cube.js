@@ -2,8 +2,8 @@
 
 /**
  * drawCube builds the necessary buffers for a cube (composed of triangles)
- * and issues the draw call. It assumes that the appropriate uniforms
- * (u_ModelMatrix and u_GlobalRotation) have already been set.
+ * and draws it. It assumes that the shader program is in use and that the
+ * uniforms u_ModelMatrix and u_GlobalRotation are already set.
  *
  * @param {WebGLRenderingContext} gl - The WebGL context.
  * @param {WebGLProgram} program - The shader program (which uses attributes a_Position and a_Color).
@@ -63,6 +63,6 @@ function drawCube(gl, program) {
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
   
-    // Draw the cube.
+    // Finally, draw the cube.
     gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0);
   }  
