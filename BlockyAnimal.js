@@ -2,12 +2,14 @@
 
 // Global variables
 var gl, program, canvas;
-var gAnimalGlobalRotation = 0;   // Rotation around Y-axis (in degrees)
-var gAnimalGlobalRotationX = 0;    // Rotation around X-axis (in degrees)
-var gCameraZoom = 12;              // Camera Z position for zoom (default 12)
+var gAnimalGlobalRotation = 0;   // Object rotation around Y-axis (in degrees)
+var gAnimalGlobalRotationX = 0;    // Object rotation around X-axis (in degrees)
+var gCameraZoom = 12;              // Camera distance (zoom level)
+var gCameraAzimuth = 0;            // Camera azimuth (rotation around Y-axis, in degrees)
+var gCameraElevation = 0;          // Camera elevation (rotation around X-axis, in degrees)
 
 // Vertex shader uses two uniforms:
-// - u_GlobalRotation: a matrix built from the slider values.
+// - u_GlobalRotation: a matrix built from the slider values for object rotation.
 // - u_ModelMatrix: the view–projection matrix multiplied by each object's local transform.
 const vertexShaderSource = `
     attribute vec4 a_Position;
@@ -16,7 +18,7 @@ const vertexShaderSource = `
     uniform mat4 u_ModelMatrix;
     varying vec4 v_Color;
     void main() {
-        // Apply the local transform (u_ModelMatrix) then the global rotation.
+        // First apply the local transform (u_ModelMatrix) then the global object rotation.
         gl_Position = u_ModelMatrix * u_GlobalRotation * a_Position;
         v_Color = a_Color;
     }
@@ -65,13 +67,13 @@ function createProgram(gl, vShaderSource, fShaderSource) {
 
 /**
  * renderSkink() clears the canvas, computes the global rotation and view–projection matrices,
- * and then draws two cubes (one larger on the left and one smaller on the right) to form a blocky skink.
+ * and then draws a skink composed of multiple cubes.
  */
 function renderSkink() {
-    // Clear both the color and depth buffers.
+    // Clear the color and depth buffers.
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    // --- Compute the global rotation matrix from slider values ---
+    // --- Compute the global object rotation matrix from slider values ---
     var globalRotationX = mat4.create();
     mat4.fromXRotation(globalRotationX, gAnimalGlobalRotationX * Math.PI / 180);
     var globalRotationY = mat4.create();
@@ -80,10 +82,20 @@ function renderSkink() {
     // Apply X rotation first, then Y rotation.
     mat4.multiply(globalRotationMatrix, globalRotationY, globalRotationX);
 
-    // --- Compute the view–projection matrix ---
+    // --- Compute the view–projection matrix using camera rotation sliders ---
     var viewMatrix = mat4.create();
-    // Position the camera using the zoom variable gCameraZoom.
-    mat4.lookAt(viewMatrix, [0, 2, gCameraZoom], [0, 0, 0], [0, 1, 0]);
+    // Compute the camera's eye position in spherical coordinates:
+    // Convert angles from degrees to radians.
+    var azimuth = gCameraAzimuth * Math.PI / 180;
+    var elevation = gCameraElevation * Math.PI / 180;
+    var distance = gCameraZoom;
+    var eyeX = distance * Math.sin(azimuth) * Math.cos(elevation);
+    var eyeY = distance * Math.sin(elevation);
+    var eyeZ = distance * Math.cos(azimuth) * Math.cos(elevation);
+    var eye = [eyeX, eyeY, eyeZ];
+    // Look at the origin; use the Y-axis as up.
+    mat4.lookAt(viewMatrix, eye, [0, 0, 0], [0, 1, 0]);
+
     var projectionMatrix = mat4.create();
     mat4.perspective(projectionMatrix, Math.PI / 4, canvas.width / canvas.height, 0.1, 100);
     var vpMatrix = mat4.create();
@@ -104,8 +116,7 @@ function renderSkink() {
         drawCube(gl, program);
     }
 
-    // --- Draw the skink parts ---
-
+    // --- Draw the skink parts (same as before) ---
     // Body: 3 cubes in a row (centers at x = -1, 0, 1)
     var local = mat4.create();
     mat4.fromTranslation(local, [-1, 0, 0]);
@@ -146,8 +157,8 @@ function renderSkink() {
 }
 
 /**
- * main() sets up WebGL, compiles shaders, creates the program, registers slider events
- * for global rotation and zoom, and draws the initial skink scene by calling renderSkink().
+ * main() sets up WebGL, compiles shaders, creates the program, registers the slider events
+ * for object rotation and camera control, and draws the initial skink by calling renderSkink().
  */
 function main() {
     canvas = document.getElementById("webgl");
@@ -169,14 +180,14 @@ function main() {
     }
     gl.useProgram(program);
 
-    // Register the slider for Y-axis rotation.
+    // Register the slider for object Y-axis rotation.
     var sliderY = document.getElementById("rotationSliderY");
     sliderY.addEventListener("input", function () {
         gAnimalGlobalRotation = Number(this.value);
         renderSkink();
     });
 
-    // Register the slider for X-axis rotation.
+    // Register the slider for object X-axis rotation.
     var sliderX = document.getElementById("rotationSliderX");
     sliderX.addEventListener("input", function () {
         gAnimalGlobalRotationX = Number(this.value);
@@ -187,6 +198,20 @@ function main() {
     var zoomSlider = document.getElementById("zoomSlider");
     zoomSlider.addEventListener("input", function () {
         gCameraZoom = Number(this.value);
+        renderSkink();
+    });
+
+    // Register the slider for camera azimuth.
+    var azimuthSlider = document.getElementById("cameraAzimuthSlider");
+    azimuthSlider.addEventListener("input", function () {
+        gCameraAzimuth = Number(this.value);
+        renderSkink();
+    });
+
+    // Register the slider for camera elevation.
+    var elevationSlider = document.getElementById("cameraElevationSlider");
+    elevationSlider.addEventListener("input", function () {
+        gCameraElevation = Number(this.value);
         renderSkink();
     });
 
