@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Blocky Animal WebGL - Running Skink</title>
+  <title>Blocky Animal WebGL - Running Skink with Animated Mouth</title>
   <style>
     canvas {
       display: block;
@@ -81,9 +81,14 @@
     <input type="range" id="tailJointSlider3" min="-180" max="180" value="0">
   </div>
   
-  <!-- Button to toggle running animation (tail wag, leg swing, head shake) -->
+  <!-- Button to toggle running animation -->
   <div class="slider-container">
     <button id="tailWagButton">Start Running Animation</button>
+  </div>
+  
+  <!-- Button to toggle mouth animation -->
+  <div class="slider-container">
+    <button id="mouthButton">Start Mouth Animation</button>
   </div>
   
   <!-- External library: gl-matrix -->

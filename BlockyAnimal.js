@@ -1,6 +1,5 @@
 // BlockyAnimal.js
 
-// Global variables for object rotation, camera controls, leg joints, tail joints, and head shake.
 var gl, program, canvas;
 var gAnimalGlobalRotation = 0;    // Object Y rotation (degrees)
 var gAnimalGlobalRotationX = 0;   // Object X rotation (degrees)
@@ -22,27 +21,33 @@ var gTailJointAngle3 = 0;
 // Head shake angle (degrees)
 var gHeadShakeAngle = 0;
 
-// Run animation control.
+// Mouth animation variables.
+var mouthAnimationOn = false;
+var gMouthOpenAmount = 0; // Ranges from 0 (closed) to 1 (fully open)
+
+// Running animation control.
 var runAnimationOn = false;
 
 // Animation constants.
-var tailWagFrequency = 2;          // cycles per second for tail wag
-var tailWagAmplitude1 = 30;        // degrees for tail joint 1
-var tailWagAmplitude2 = 20;        // degrees for tail joint 2
-var tailWagAmplitude3 = 10;        // degrees for tail joint 3
-var tailWagPhase2 = Math.PI / 4;   // phase offset for tail joint 2
-var tailWagPhase3 = Math.PI / 2;   // phase offset for tail joint 3
+var tailWagFrequency = 2;
+var tailWagAmplitude1 = 30;
+var tailWagAmplitude2 = 20;
+var tailWagAmplitude3 = 10;
+var tailWagPhase2 = Math.PI / 4;
+var tailWagPhase3 = Math.PI / 2;
 
-var legFrequency = 2;              // cycles per second for leg swing
-var legAmplitude = 20;             // degrees for leg swing
-// Set alternating phases for diagonal leg movement.
+var legFrequency = 2;
+var legAmplitude = 20;
 var frontLeftLegPhase = 0;
 var frontRightLegPhase = Math.PI;
 var backLeftLegPhase = Math.PI;
 var backRightLegPhase = 0;
 
-var headShakeFrequency = 2;        // cycles per second for head shake
-var headShakeAmplitude = 10;       // degrees for head shake
+var headShakeFrequency = 2;
+var headShakeAmplitude = 10;
+
+// Mouth animation frequency (open/close every ~3 seconds)
+var mouthFrequency = 0.33; // cycles per second
 
 const vertexShaderSource = `
     attribute vec4 a_Position;
@@ -91,21 +96,24 @@ function createProgram(gl, vShaderSource, fShaderSource) {
 }
 
 function tick() {
+    var t = performance.now() / 1000;
     if (runAnimationOn) {
-        var t = performance.now() / 1000;
-        // Update tail joints.
+        // Running animation: update tail, leg, and head shake.
         gTailJointAngle1 = tailWagAmplitude1 * Math.sin(2 * Math.PI * tailWagFrequency * t);
         gTailJointAngle2 = tailWagAmplitude2 * Math.sin(2 * Math.PI * tailWagFrequency * t + tailWagPhase2);
         gTailJointAngle3 = tailWagAmplitude3 * Math.sin(2 * Math.PI * tailWagFrequency * t + tailWagPhase3);
-        // Update leg joints (alternating).
         gFrontLeftLegJointAngle = legAmplitude * Math.sin(2 * Math.PI * legFrequency * t + frontLeftLegPhase);
         gFrontRightLegJointAngle = legAmplitude * Math.sin(2 * Math.PI * legFrequency * t + frontRightLegPhase);
         gBackLeftLegJointAngle = legAmplitude * Math.sin(2 * Math.PI * legFrequency * t + backLeftLegPhase);
         gBackRightLegJointAngle = legAmplitude * Math.sin(2 * Math.PI * legFrequency * t + backRightLegPhase);
-        // Update head shake.
         gHeadShakeAngle = headShakeAmplitude * Math.sin(2 * Math.PI * headShakeFrequency * t);
-        renderSkink();
     }
+    if (mouthAnimationOn) {
+        gMouthOpenAmount = (Math.sin(2 * Math.PI * mouthFrequency * t) + 1) / 2;
+    } else {
+        gMouthOpenAmount = 0;
+    }
+    renderSkink();
     requestAnimationFrame(tick);
 }
 
@@ -118,14 +126,14 @@ function main() {
     }
     gl.clearColor(0.2, 0.2, 0.8, 1.0);
     gl.enable(gl.DEPTH_TEST);
-
+    
     program = createProgram(gl, vertexShaderSource, fragmentShaderSource);
     if (!program) {
         console.error("Failed to create shader program.");
         return;
     }
     gl.useProgram(program);
-
+    
     // Register slider events.
     document.getElementById("rotationSliderY").addEventListener("input", function () {
         gAnimalGlobalRotation = Number(this.value);
@@ -147,7 +155,7 @@ function main() {
         gCameraElevation = Number(this.value);
         renderSkink();
     });
-    // Leg joint sliders (manual control).
+    // Leg joint sliders.
     document.getElementById("frontLeftLegSlider").addEventListener("input", function () {
         gFrontLeftLegJointAngle = Number(this.value);
         renderSkink();
@@ -164,7 +172,7 @@ function main() {
         gBackRightLegJointAngle = Number(this.value);
         renderSkink();
     });
-    // Tail joint sliders (manual control).
+    // Tail joint sliders.
     document.getElementById("tailJointSlider1").addEventListener("input", function () {
         gTailJointAngle1 = Number(this.value);
         renderSkink();
@@ -177,13 +185,19 @@ function main() {
         gTailJointAngle3 = Number(this.value);
         renderSkink();
     });
-
+    
     // Button to toggle running animation.
     document.getElementById("tailWagButton").addEventListener("click", function () {
         runAnimationOn = !runAnimationOn;
         this.textContent = runAnimationOn ? "Stop Running Animation" : "Start Running Animation";
     });
-
+    
+    // Button to toggle mouth animation.
+    document.getElementById("mouthButton").addEventListener("click", function () {
+        mouthAnimationOn = !mouthAnimationOn;
+        this.textContent = mouthAnimationOn ? "Stop Mouth Animation" : "Start Mouth Animation";
+    });
+    
     renderSkink();
     tick();
 }
