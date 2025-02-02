@@ -1,16 +1,49 @@
 // BlockyAnimal.js
 
-// Global variables
+// Global variables for object rotation, camera controls, leg joints, tail joints, and head shake.
 var gl, program, canvas;
-var gAnimalGlobalRotation = 0;   // Object rotation around Y-axis (in degrees)
-var gAnimalGlobalRotationX = 0;    // Object rotation around X-axis (in degrees)
-var gCameraZoom = 12;              // Camera distance (zoom level)
-var gCameraAzimuth = 0;            // Camera azimuth (rotation around Y-axis, in degrees)
-var gCameraElevation = 0;          // Camera elevation (rotation around X-axis, in degrees)
+var gAnimalGlobalRotation = 0;    // Object Y rotation (degrees)
+var gAnimalGlobalRotationX = 0;   // Object X rotation (degrees)
+var gCameraZoom = 12;             // Camera distance
+var gCameraAzimuth = 0;           // Camera azimuth (degrees)
+var gCameraElevation = 0;         // Camera elevation (degrees)
 
-// Vertex shader uses two uniforms:
-// - u_GlobalRotation: a matrix built from the slider values for object rotation.
-// - u_ModelMatrix: the view–projection matrix multiplied by each object's local transform.
+// Leg joint angles (degrees)
+var gFrontLeftLegJointAngle  = 0;
+var gFrontRightLegJointAngle = 0;
+var gBackLeftLegJointAngle   = 0;
+var gBackRightLegJointAngle  = 0;
+
+// Tail joint angles (degrees)
+var gTailJointAngle1 = 0;
+var gTailJointAngle2 = 0;
+var gTailJointAngle3 = 0;
+
+// Head shake angle (degrees)
+var gHeadShakeAngle = 0;
+
+// Run animation control.
+var runAnimationOn = false;
+
+// Animation constants.
+var tailWagFrequency = 2;          // cycles per second for tail wag
+var tailWagAmplitude1 = 30;        // degrees for tail joint 1
+var tailWagAmplitude2 = 20;        // degrees for tail joint 2
+var tailWagAmplitude3 = 10;        // degrees for tail joint 3
+var tailWagPhase2 = Math.PI / 4;   // phase offset for tail joint 2
+var tailWagPhase3 = Math.PI / 2;   // phase offset for tail joint 3
+
+var legFrequency = 2;              // cycles per second for leg swing
+var legAmplitude = 20;             // degrees for leg swing
+// Set alternating phases for diagonal leg movement.
+var frontLeftLegPhase = 0;
+var frontRightLegPhase = Math.PI;
+var backLeftLegPhase = Math.PI;
+var backRightLegPhase = 0;
+
+var headShakeFrequency = 2;        // cycles per second for head shake
+var headShakeAmplitude = 10;       // degrees for head shake
+
 const vertexShaderSource = `
     attribute vec4 a_Position;
     attribute vec4 a_Color;
@@ -18,13 +51,11 @@ const vertexShaderSource = `
     uniform mat4 u_ModelMatrix;
     varying vec4 v_Color;
     void main() {
-        // First apply the local transform (u_ModelMatrix) then the global object rotation.
         gl_Position = u_ModelMatrix * u_GlobalRotation * a_Position;
         v_Color = a_Color;
     }
 `;
 
-// Fragment shader remains unchanged.
 const fragmentShaderSource = `
     precision mediump float;
     varying vec4 v_Color;
@@ -33,9 +64,6 @@ const fragmentShaderSource = `
     }
 `;
 
-/**
- * Utility function to compile a shader.
- */
 function createShader(gl, type, source) {
     const shader = gl.createShader(type);
     gl.shaderSource(shader, source);
@@ -48,9 +76,6 @@ function createShader(gl, type, source) {
     return shader;
 }
 
-/**
- * Utility function to create a shader program.
- */
 function createProgram(gl, vShaderSource, fShaderSource) {
     const vertexShader = createShader(gl, gl.VERTEX_SHADER, vShaderSource);
     const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fShaderSource);
@@ -65,101 +90,25 @@ function createProgram(gl, vShaderSource, fShaderSource) {
     return program;
 }
 
-/**
- * renderSkink() clears the canvas, computes the global rotation and view–projection matrices,
- * and then draws a skink composed of multiple cubes.
- */
-function renderSkink() {
-    // Clear the color and depth buffers.
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
-    // --- Compute the global object rotation matrix from slider values ---
-    var globalRotationX = mat4.create();
-    mat4.fromXRotation(globalRotationX, gAnimalGlobalRotationX * Math.PI / 180);
-    var globalRotationY = mat4.create();
-    mat4.fromYRotation(globalRotationY, gAnimalGlobalRotation * Math.PI / 180);
-    var globalRotationMatrix = mat4.create();
-    // Apply X rotation first, then Y rotation.
-    mat4.multiply(globalRotationMatrix, globalRotationY, globalRotationX);
-
-    // --- Compute the view–projection matrix using camera rotation sliders ---
-    var viewMatrix = mat4.create();
-    // Compute the camera's eye position in spherical coordinates:
-    // Convert angles from degrees to radians.
-    var azimuth = gCameraAzimuth * Math.PI / 180;
-    var elevation = gCameraElevation * Math.PI / 180;
-    var distance = gCameraZoom;
-    var eyeX = distance * Math.sin(azimuth) * Math.cos(elevation);
-    var eyeY = distance * Math.sin(elevation);
-    var eyeZ = distance * Math.cos(azimuth) * Math.cos(elevation);
-    var eye = [eyeX, eyeY, eyeZ];
-    // Look at the origin; use the Y-axis as up.
-    mat4.lookAt(viewMatrix, eye, [0, 0, 0], [0, 1, 0]);
-
-    var projectionMatrix = mat4.create();
-    mat4.perspective(projectionMatrix, Math.PI / 4, canvas.width / canvas.height, 0.1, 100);
-    var vpMatrix = mat4.create();
-    mat4.multiply(vpMatrix, projectionMatrix, viewMatrix);
-
-    // Set the global rotation uniform.
-    var u_GlobalRotation = gl.getUniformLocation(program, "u_GlobalRotation");
-    gl.uniformMatrix4fv(u_GlobalRotation, false, globalRotationMatrix);
-
-    // Get location of u_ModelMatrix uniform.
-    var u_ModelMatrix = gl.getUniformLocation(program, "u_ModelMatrix");
-
-    // Helper function: for a given local transform, combine it with vpMatrix, set uniform, and draw cube.
-    function drawCubePiece(localTransform) {
-        var finalMatrix = mat4.create();
-        mat4.multiply(finalMatrix, vpMatrix, localTransform);
-        gl.uniformMatrix4fv(u_ModelMatrix, false, finalMatrix);
-        drawCube(gl, program);
+function tick() {
+    if (runAnimationOn) {
+        var t = performance.now() / 1000;
+        // Update tail joints.
+        gTailJointAngle1 = tailWagAmplitude1 * Math.sin(2 * Math.PI * tailWagFrequency * t);
+        gTailJointAngle2 = tailWagAmplitude2 * Math.sin(2 * Math.PI * tailWagFrequency * t + tailWagPhase2);
+        gTailJointAngle3 = tailWagAmplitude3 * Math.sin(2 * Math.PI * tailWagFrequency * t + tailWagPhase3);
+        // Update leg joints (alternating).
+        gFrontLeftLegJointAngle = legAmplitude * Math.sin(2 * Math.PI * legFrequency * t + frontLeftLegPhase);
+        gFrontRightLegJointAngle = legAmplitude * Math.sin(2 * Math.PI * legFrequency * t + frontRightLegPhase);
+        gBackLeftLegJointAngle = legAmplitude * Math.sin(2 * Math.PI * legFrequency * t + backLeftLegPhase);
+        gBackRightLegJointAngle = legAmplitude * Math.sin(2 * Math.PI * legFrequency * t + backRightLegPhase);
+        // Update head shake.
+        gHeadShakeAngle = headShakeAmplitude * Math.sin(2 * Math.PI * headShakeFrequency * t);
+        renderSkink();
     }
-
-    // --- Draw the skink parts (same as before) ---
-    // Body: 3 cubes in a row (centers at x = -1, 0, 1)
-    var local = mat4.create();
-    mat4.fromTranslation(local, [-1, 0, 0]);
-    drawCubePiece(local);
-    mat4.fromTranslation(local, [0, 0, 0]);
-    drawCubePiece(local);
-    mat4.fromTranslation(local, [1, 0, 0]);
-    drawCubePiece(local);
-
-    // Head: 1 cube at the front (x = 2)
-    mat4.fromTranslation(local, [2, 0, 0]);
-    drawCubePiece(local);
-
-    // Tail: 2 cubes at the back (x = -2 and x = -3)
-    mat4.fromTranslation(local, [-2, 0, 0]);
-    drawCubePiece(local);
-    mat4.fromTranslation(local, [-3, 0, 0]);
-    drawCubePiece(local);
-
-    // Legs: 4 small cubes (scaled 0.5) attached to the underside of the middle body cube.
-    var leg = mat4.create();
-    // Front left leg: (0.5, -0.75, 0.5)
-    mat4.fromTranslation(leg, [0.5, -0.75, 0.5]);
-    mat4.scale(leg, leg, [0.5, 0.5, 0.5]);
-    drawCubePiece(leg);
-    // Front right leg: (0.5, -0.75, -0.5)
-    mat4.fromTranslation(leg, [0.5, -0.75, -0.5]);
-    mat4.scale(leg, leg, [0.5, 0.5, 0.5]);
-    drawCubePiece(leg);
-    // Back left leg: (-0.5, -0.75, 0.5)
-    mat4.fromTranslation(leg, [-0.5, -0.75, 0.5]);
-    mat4.scale(leg, leg, [0.5, 0.5, 0.5]);
-    drawCubePiece(leg);
-    // Back right leg: (-0.5, -0.75, -0.5)
-    mat4.fromTranslation(leg, [-0.5, -0.75, -0.5]);
-    mat4.scale(leg, leg, [0.5, 0.5, 0.5]);
-    drawCubePiece(leg);
+    requestAnimationFrame(tick);
 }
 
-/**
- * main() sets up WebGL, compiles shaders, creates the program, registers the slider events
- * for object rotation and camera control, and draws the initial skink by calling renderSkink().
- */
 function main() {
     canvas = document.getElementById("webgl");
     gl = canvas.getContext("webgl");
@@ -167,12 +116,9 @@ function main() {
         console.error("Failed to get WebGL context.");
         return;
     }
-
-    // Set clear color and enable depth testing.
     gl.clearColor(0.2, 0.2, 0.8, 1.0);
     gl.enable(gl.DEPTH_TEST);
 
-    // Create the shader program.
     program = createProgram(gl, vertexShaderSource, fragmentShaderSource);
     if (!program) {
         console.error("Failed to create shader program.");
@@ -180,43 +126,66 @@ function main() {
     }
     gl.useProgram(program);
 
-    // Register the slider for object Y-axis rotation.
-    var sliderY = document.getElementById("rotationSliderY");
-    sliderY.addEventListener("input", function () {
+    // Register slider events.
+    document.getElementById("rotationSliderY").addEventListener("input", function () {
         gAnimalGlobalRotation = Number(this.value);
         renderSkink();
     });
-
-    // Register the slider for object X-axis rotation.
-    var sliderX = document.getElementById("rotationSliderX");
-    sliderX.addEventListener("input", function () {
+    document.getElementById("rotationSliderX").addEventListener("input", function () {
         gAnimalGlobalRotationX = Number(this.value);
         renderSkink();
     });
-
-    // Register the slider for camera zoom.
-    var zoomSlider = document.getElementById("zoomSlider");
-    zoomSlider.addEventListener("input", function () {
+    document.getElementById("zoomSlider").addEventListener("input", function () {
         gCameraZoom = Number(this.value);
         renderSkink();
     });
-
-    // Register the slider for camera azimuth.
-    var azimuthSlider = document.getElementById("cameraAzimuthSlider");
-    azimuthSlider.addEventListener("input", function () {
+    document.getElementById("cameraAzimuthSlider").addEventListener("input", function () {
         gCameraAzimuth = Number(this.value);
         renderSkink();
     });
-
-    // Register the slider for camera elevation.
-    var elevationSlider = document.getElementById("cameraElevationSlider");
-    elevationSlider.addEventListener("input", function () {
+    document.getElementById("cameraElevationSlider").addEventListener("input", function () {
         gCameraElevation = Number(this.value);
         renderSkink();
     });
+    // Leg joint sliders (manual control).
+    document.getElementById("frontLeftLegSlider").addEventListener("input", function () {
+        gFrontLeftLegJointAngle = Number(this.value);
+        renderSkink();
+    });
+    document.getElementById("frontRightLegSlider").addEventListener("input", function () {
+        gFrontRightLegJointAngle = Number(this.value);
+        renderSkink();
+    });
+    document.getElementById("backLeftLegSlider").addEventListener("input", function () {
+        gBackLeftLegJointAngle = Number(this.value);
+        renderSkink();
+    });
+    document.getElementById("backRightLegSlider").addEventListener("input", function () {
+        gBackRightLegJointAngle = Number(this.value);
+        renderSkink();
+    });
+    // Tail joint sliders (manual control).
+    document.getElementById("tailJointSlider1").addEventListener("input", function () {
+        gTailJointAngle1 = Number(this.value);
+        renderSkink();
+    });
+    document.getElementById("tailJointSlider2").addEventListener("input", function () {
+        gTailJointAngle2 = Number(this.value);
+        renderSkink();
+    });
+    document.getElementById("tailJointSlider3").addEventListener("input", function () {
+        gTailJointAngle3 = Number(this.value);
+        renderSkink();
+    });
 
-    // Draw the initial skink.
+    // Button to toggle running animation.
+    document.getElementById("tailWagButton").addEventListener("click", function () {
+        runAnimationOn = !runAnimationOn;
+        this.textContent = runAnimationOn ? "Stop Running Animation" : "Start Running Animation";
+    });
+
     renderSkink();
+    tick();
 }
 
 window.onload = main;

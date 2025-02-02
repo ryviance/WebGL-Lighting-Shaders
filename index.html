@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Blocky Animal WebGL - Skink with Camera Orbit</title>
+  <title>Blocky Animal WebGL - Running Skink</title>
   <style>
     canvas {
       display: block;
@@ -14,45 +14,83 @@
       margin: 10px auto;
       width: 300px;
     }
+    .slider-container label {
+      display: inline-block;
+      width: 150px;
+      text-align: right;
+      margin-right: 10px;
+    }
   </style>
 </head>
 <body>
   <canvas id="webgl" width="500" height="500"></canvas>
-
-  <!-- Slider for object Y-axis rotation -->
+  
+  <!-- Global object rotation sliders -->
   <div class="slider-container">
     <label for="rotationSliderY">Object Y Rotation (°): </label>
     <input type="range" id="rotationSliderY" min="0" max="360" value="0">
   </div>
-
-  <!-- Slider for object X-axis rotation -->
   <div class="slider-container">
     <label for="rotationSliderX">Object X Rotation (°): </label>
     <input type="range" id="rotationSliderX" min="0" max="360" value="0">
   </div>
   
-  <!-- Slider for camera zoom (distance) -->
+  <!-- Camera control sliders -->
   <div class="slider-container">
     <label for="zoomSlider">Camera Zoom (Distance): </label>
     <input type="range" id="zoomSlider" min="5" max="20" value="12">
   </div>
-  
-  <!-- Slider for camera azimuth -->
   <div class="slider-container">
-    <label for="cameraAzimuthSlider">Camera Horizontal (°): </label>
+    <label for="cameraAzimuthSlider">Camera Azimuth (°): </label>
     <input type="range" id="cameraAzimuthSlider" min="0" max="360" value="0">
   </div>
-  
-  <!-- Slider for camera elevation -->
   <div class="slider-container">
     <label for="cameraElevationSlider">Camera Elevation (°): </label>
     <input type="range" id="cameraElevationSlider" min="-90" max="90" value="0">
   </div>
-
+  
+  <!-- Leg joint angle sliders -->
+  <div class="slider-container">
+    <label for="frontLeftLegSlider">Front Left Leg (°): </label>
+    <input type="range" id="frontLeftLegSlider" min="-90" max="90" value="0">
+  </div>
+  <div class="slider-container">
+    <label for="frontRightLegSlider">Front Right Leg (°): </label>
+    <input type="range" id="frontRightLegSlider" min="-90" max="90" value="0">
+  </div>
+  <div class="slider-container">
+    <label for="backLeftLegSlider">Back Left Leg (°): </label>
+    <input type="range" id="backLeftLegSlider" min="-90" max="90" value="0">
+  </div>
+  <div class="slider-container">
+    <label for="backRightLegSlider">Back Right Leg (°): </label>
+    <input type="range" id="backRightLegSlider" min="-90" max="90" value="0">
+  </div>
+  
+  <!-- Tail joint angle sliders (manual control) -->
+  <div class="slider-container">
+    <label for="tailJointSlider1">Tail Joint 1 (°): </label>
+    <input type="range" id="tailJointSlider1" min="-180" max="180" value="0">
+  </div>
+  <div class="slider-container">
+    <label for="tailJointSlider2">Tail Joint 2 (°): </label>
+    <input type="range" id="tailJointSlider2" min="-180" max="180" value="0">
+  </div>
+  <div class="slider-container">
+    <label for="tailJointSlider3">Tail Joint 3 (°): </label>
+    <input type="range" id="tailJointSlider3" min="-180" max="180" value="0">
+  </div>
+  
+  <!-- Button to toggle running animation (tail wag, leg swing, head shake) -->
+  <div class="slider-container">
+    <button id="tailWagButton">Start Running Animation</button>
+  </div>
+  
   <!-- External library: gl-matrix -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js"></script>
   <!-- Project files -->
   <script src="Cube.js"></script>
+  <script src="Skink.js"></script>
   <script src="BlockyAnimal.js"></script>
 </body>
 </html>
