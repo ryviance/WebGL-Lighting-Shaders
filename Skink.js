@@ -214,4 +214,19 @@ function renderSkink() {
     mat4.multiply(backRightLeg, backRightLeg, temp);
     mat4.scale(backRightLeg, backRightLeg, [0.5, 0.5, 0.5]);
     drawCubePiece(backRightLeg);
+
+    // Helper function to draw a sphere piece.
+    function drawSpherePiece(localTransform) {
+      var finalMatrix = mat4.create();
+      mat4.multiply(finalMatrix, vpMatrix, localTransform);
+      gl.uniformMatrix4fv(u_ModelMatrix, false, finalMatrix);
+      // Draw a sphere with radius 0.5 and 20 subdivisions in both directions.
+      drawSphere(gl, program, 0.5, 20, 20);
+    }
+
+    // Position the sphere directly above the skink.
+    // You can adjust the translation values if needed.
+    var sphereTransform = mat4.create();
+    mat4.fromTranslation(sphereTransform, [0, 3, 0]);  // [x, y, z] – y positive is up.
+    drawSpherePiece(sphereTransform);
   }  
