@@ -57,10 +57,8 @@ function initWebGL() {
     if (isDragging) {
       var dx = e.clientX - lastMouseX;
       var dy = e.clientY - lastMouseY;
-      // Adjust sensitivity factor as needed.
       azimuth += dx * 0.5;
       elevation += dy * 0.5;
-      // Clamp elevation between -90 and 90 degrees.
       if (elevation > 90) elevation = 90;
       if (elevation < -90) elevation = -90;
       lastMouseX = e.clientX;
@@ -94,18 +92,15 @@ function initShaders() {
     varying vec3 v_FragPos;
     
     void main() {
-      // Calculate world position of the vertex.
       vec4 worldPos = u_ModelMatrix * vec4(a_Position, 1.0);
       gl_Position = u_ProjMatrix * u_ViewMatrix * worldPos;
-      
-      // Pass color and normal to the fragment shader.
       v_Color = a_Color;
       v_Normal = normalize(u_NormalMatrix * a_Normal);
-      v_FragPos = worldPos.xyz;  // in world space.
+      v_FragPos = worldPos.xyz;
     }
   `;
   
-  // Fragment shader with reversed spotlight direction.
+  // Fragment shader.
   var fsSource = `
     precision mediump float;
     
@@ -122,19 +117,16 @@ function initShaders() {
     uniform vec3 u_Center;      // center of the sphere (target of spotlight)
     uniform bool u_IsLightMarker;  // when true, draw light marker without lighting
     
-    // Material properties.
     const float ambientStrength = 0.05;
     const float specularStrength = 0.5;
     const float shininess = 32.0;
     
     void main() {
-      // If drawing the light marker, output the light color directly.
       if(u_IsLightMarker) {
         gl_FragColor = vec4(u_LightColor, 1.0);
         return;
       }
       
-      // Normal visualization mode.
       if(u_NormalVis) {
         vec3 normalColor = normalize(v_Normal) * 0.5 + 0.5;
         gl_FragColor = vec4(normalColor, 1.0);
@@ -206,41 +198,41 @@ function setUniformMatrices() {
   eye[2] = zoom * Math.cos(radEl) * Math.cos(radAz);
   
   mat4.lookAt(viewMatrix, eye, center, up);
-  // Increase far clipping plane to 10000 to allow zooming out further.
+  // Set far clipping plane to 10000 so you can zoom out further.
   mat4.perspective(projMatrix, glMatrix.toRadian(45), canvas.width / canvas.height, 0.1, 10000.0);
   
   mat3.normalFromMat4(normalMatrix, modelMatrix);
   
-  var uModel = gl.getUniformLocation(program, "u_ModelMatrix");
-  var uView = gl.getUniformLocation(program, "u_ViewMatrix");
-  var uProj = gl.getUniformLocation(program, "u_ProjMatrix");
-  var uNormal = gl.getUniformLocation(program, "u_NormalMatrix");
+  var u_ModelMatrix = gl.getUniformLocation(program, "u_ModelMatrix");
+  var u_ViewMatrix = gl.getUniformLocation(program, "u_ViewMatrix");
+  var u_ProjMatrix = gl.getUniformLocation(program, "u_ProjMatrix");
+  var u_NormalMatrix = gl.getUniformLocation(program, "u_NormalMatrix");
   
-  gl.uniformMatrix4fv(uModel, false, modelMatrix);
-  gl.uniformMatrix4fv(uView, false, viewMatrix);
-  gl.uniformMatrix4fv(uProj, false, projMatrix);
-  gl.uniformMatrix3fv(uNormal, false, normalMatrix);
+  gl.uniformMatrix4fv(u_ModelMatrix, false, modelMatrix);
+  gl.uniformMatrix4fv(u_ViewMatrix, false, viewMatrix);
+  gl.uniformMatrix4fv(u_ProjMatrix, false, projMatrix);
+  gl.uniformMatrix3fv(u_NormalMatrix, false, normalMatrix);
   
-  var uViewPos = gl.getUniformLocation(program, "u_ViewPos");
-  gl.uniform3fv(uViewPos, eye);
+  var u_ViewPos = gl.getUniformLocation(program, "u_ViewPos");
+  gl.uniform3fv(u_ViewPos, eye);
 }
 
 function setUniformLighting(isLightMarker) {
-  var uLightPos = gl.getUniformLocation(program, "u_LightPos");
-  var uLightColor = gl.getUniformLocation(program, "u_LightColor");
-  var uNormalVis = gl.getUniformLocation(program, "u_NormalVis");
-  var uLightOn = gl.getUniformLocation(program, "u_LightOn");
-  var uSpotCutoff = gl.getUniformLocation(program, "u_SpotCutoff");
-  var uCenter = gl.getUniformLocation(program, "u_Center");
-  var uIsLightMarker = gl.getUniformLocation(program, "u_IsLightMarker");
+  var u_LightPos = gl.getUniformLocation(program, "u_LightPos");
+  var u_LightColor = gl.getUniformLocation(program, "u_LightColor");
+  var u_NormalVis = gl.getUniformLocation(program, "u_NormalVis");
+  var u_LightOn = gl.getUniformLocation(program, "u_LightOn");
+  var u_SpotCutoff = gl.getUniformLocation(program, "u_SpotCutoff");
+  var u_Center = gl.getUniformLocation(program, "u_Center");
+  var u_IsLightMarker = gl.getUniformLocation(program, "u_IsLightMarker");
   
-  gl.uniform3fv(uLightPos, lightPos);
-  gl.uniform3fv(uLightColor, lightColor);
-  gl.uniform1i(uNormalVis, normalVis);
-  gl.uniform1i(uLightOn, lightingOn);
-  gl.uniform1f(uSpotCutoff, spotCutoff);
-  gl.uniform3fv(uCenter, center);
-  gl.uniform1i(uIsLightMarker, isLightMarker);
+  gl.uniform3fv(u_LightPos, lightPos);
+  gl.uniform3fv(u_LightColor, lightColor);
+  gl.uniform1i(u_NormalVis, normalVis);
+  gl.uniform1i(u_LightOn, lightingOn);
+  gl.uniform1f(u_SpotCutoff, spotCutoff);
+  gl.uniform3fv(u_Center, center);
+  gl.uniform1i(u_IsLightMarker, isLightMarker);
 }
 
 function renderScene() {
@@ -248,46 +240,62 @@ function renderScene() {
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   
   setUniformMatrices();
-  setUniformLighting();
+  setUniformLighting(false);
+  
+  var u_ModelMatrix = gl.getUniformLocation(program, "u_ModelMatrix");
+  var u_NormalMatrix = gl.getUniformLocation(program, "u_NormalMatrix");
   
   // Draw main sphere at the origin.
-  setUniformLighting(false);
   var sphereModel = mat4.create();
   mat4.translate(sphereModel, sphereModel, [0, 0, 0]);
-  var uModel = gl.getUniformLocation(program, "u_ModelMatrix");
-  gl.uniformMatrix4fv(uModel, false, sphereModel);
+  gl.uniformMatrix4fv(u_ModelMatrix, false, sphereModel);
   
   var sphereNormal = mat3.create();
   mat3.normalFromMat4(sphereNormal, sphereModel);
-  var uNormal = gl.getUniformLocation(program, "u_NormalMatrix");
-  gl.uniformMatrix3fv(uNormal, false, sphereNormal);
+  gl.uniformMatrix3fv(u_NormalMatrix, false, sphereNormal);
   
   drawSphere(gl, program, 1.5, 30, 30);
   
-  // Draw a small cube at the light position.
+  // Draw eight cubes around the sphere for additional lighting test.
+  for (var i = 0; i < 8; i++) {
+    var angle = i * (2 * Math.PI / 8);
+    var cubeX = 3 * Math.cos(angle);
+    var cubeZ = 3 * Math.sin(angle);
+    var cubeY = 0;
+    var cubeModel = mat4.create();
+    mat4.translate(cubeModel, cubeModel, [cubeX, cubeY, cubeZ]);
+    gl.uniformMatrix4fv(u_ModelMatrix, false, cubeModel);
+    
+    var cubeNormal = mat3.create();
+    mat3.normalFromMat4(cubeNormal, cubeModel);
+    gl.uniformMatrix3fv(u_NormalMatrix, false, cubeNormal);
+    
+    drawCube(gl, program);
+  }
+  
+  // Draw a small cube at the light position (light marker).
   setUniformLighting(true);
   var lightModel = mat4.create();
   mat4.translate(lightModel, lightModel, lightPos);
   mat4.scale(lightModel, lightModel, [0.2, 0.2, 0.2]);
-  gl.uniformMatrix4fv(uModel, false, lightModel);
+  gl.uniformMatrix4fv(u_ModelMatrix, false, lightModel);
   
   var lightNormal = mat3.create();
   mat3.normalFromMat4(lightNormal, lightModel);
-  gl.uniformMatrix3fv(uNormal, false, lightNormal);
+  gl.uniformMatrix3fv(u_NormalMatrix, false, lightNormal);
   
   drawCube(gl, program);
 }
 
 function tick() {
   var currentTime = performance.now();
-  var deltaTime = currentTime - lastTime;
   lastTime = currentTime;
   
   // Animate the light in a circle (affecting only X and Z) at 5x speed.
-  var speed = 0.25; // 5x quicker than the original 0.05
+  var speed = 0.25;
   var angle = speed * currentTime * 0.001;
   autoLightPos[0] = 10 * Math.cos(angle);
-  autoLightPos[1] = 0; // no automatic movement in Y
+  autoLightPos[1] = 0;
   autoLightPos[2] = 10 * Math.sin(angle);
   
   // Combine auto movement with slider offset.
