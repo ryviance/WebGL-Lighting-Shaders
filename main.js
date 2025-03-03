@@ -296,10 +296,11 @@ function tick() {
   lastTime = currentTime;
   
   // Animate the light in a circle (optional).
-  var speed = 0.05;
-  var angle = speed * currentTime * 0.001;
-  lightPos[0] = 10 * Math.cos(angle);
-  lightPos[2] = 10 * Math.sin(angle);
+  // Comment out or remove these lines so that the sliders control lightPos.
+  // var speed = 0.05;
+  // var angle = speed * currentTime * 0.001;
+  // lightPos[0] = 10 * Math.cos(angle);
+  // lightPos[2] = 10 * Math.sin(angle);
   
   renderScene();
   requestAnimationFrame(tick);
