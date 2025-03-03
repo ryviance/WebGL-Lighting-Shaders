@@ -4,9 +4,14 @@
 var canvas, gl, program;
 var normalVis = false;   // Toggle normal visualization
 var lightingOn = true;   // Toggle lighting
-var lightPos = vec3.fromValues(10, 10, 10);
+// We'll compute the effective light position as: effective = autoLightPos + lightOffset.
+var lightPos = vec3.create(); // effective light position passed to shaders
 var lightColor = vec3.fromValues(1.0, 1.0, 1.0);
 var spotCutoff = 45.0;   // degrees for the spotlight cutoff
+
+// We'll use autoLightPos for automatic movement and lightOffset for slider control.
+var autoLightPos = vec3.create();         // automatically computed part (X, Z move in a circle)
+var lightOffset = vec3.fromValues(0, 10, 10); // initial offset so that effectiveLightPos = (10,10,10)
 
 // Camera parameters.
 var zoom = 15;
@@ -100,7 +105,7 @@ function initShaders() {
     }
   `;
   
-  // Fragment shader with updated spotlight calculations and light marker flag.
+  // Fragment shader with reversed spotlight direction.
   var fsSource = `
     precision mediump float;
     
@@ -118,7 +123,7 @@ function initShaders() {
     uniform bool u_IsLightMarker;  // when true, draw light marker without lighting
     
     // Material properties.
-    const float ambientStrength = 0.05;  // reduced ambient to emphasize spotlight effect
+    const float ambientStrength = 0.05;
     const float specularStrength = 0.5;
     const float shininess = 32.0;
     
@@ -131,52 +136,41 @@ function initShaders() {
       
       // Normal visualization mode.
       if(u_NormalVis) {
-        // Map normal from [-1,1] to [0,1] for color.
         vec3 normalColor = normalize(v_Normal) * 0.5 + 0.5;
         gl_FragColor = vec4(normalColor, 1.0);
         return;
       }
       
-      // If lighting is off, just output the base color.
       if(!u_LightOn) {
         gl_FragColor = v_Color;
         return;
       }
       
-      // Ambient term.
       vec3 ambient = ambientStrength * u_LightColor;
       
-      // Updated spotlight calculations.
-      // Define spotlight direction as the direction from the light toward the sphere's center.
-      vec3 spotDir = normalize(u_Center - u_LightPos);
+      // Define spotlight direction as from the light to the sphere's center.
+      vec3 spotDir = normalize(u_LightPos - u_Center);
       // Compute light direction from the light to the fragment.
-      vec3 lightDir = normalize(v_FragPos - u_LightPos);
+      vec3 lightDir = normalize(u_LightPos - v_FragPos);
       
-      // Compute the cosine of the angle between lightDir and spotDir.
       float cosTheta = dot(lightDir, spotDir);
-      // Calculate cutoff as cosine of the cutoff angle.
       float cutoff = cos(radians(u_SpotCutoff));
-      // Use smoothstep for a tight falloff.
       float intensity = smoothstep(cutoff, cutoff + 0.1, cosTheta);
       
-      // Diffuse term.
       vec3 norm = normalize(v_Normal);
       float diff = max(dot(norm, lightDir), 0.0);
       vec3 diffuse = diff * u_LightColor;
       
-      // Specular term.
       vec3 viewDir = normalize(u_ViewPos - v_FragPos);
       vec3 reflectDir = reflect(-lightDir, norm);
       float spec = pow(max(dot(viewDir, reflectDir), 0.0), shininess);
       vec3 specular = specularStrength * spec * u_LightColor;
       
-      // Combine all lighting components with the base color.
-      vec3 result = (ambient + intensity*(diffuse + specular)) * v_Color.rgb;
+      vec3 result = (ambient + intensity * (diffuse + specular)) * v_Color.rgb;
       gl_FragColor = vec4(result, v_Color.a);
     }
   `;
   
-  // Compile and link shaders.
   var vertexShader = loadShader(gl.VERTEX_SHADER, vsSource);
   var fragmentShader = loadShader(gl.FRAGMENT_SHADER, fsSource);
   program = gl.createProgram();
@@ -203,10 +197,8 @@ function loadShader(type, source) {
 }
 
 function setUniformMatrices() {
-  // Model matrix = identity for the main sphere.
   mat4.identity(modelMatrix);
   
-  // Calculate eye position from spherical coordinates.
   var radAz = glMatrix.toRadian(azimuth);
   var radEl = glMatrix.toRadian(elevation);
   eye[0] = zoom * Math.cos(radEl) * Math.sin(radAz);
@@ -214,12 +206,11 @@ function setUniformMatrices() {
   eye[2] = zoom * Math.cos(radEl) * Math.cos(radAz);
   
   mat4.lookAt(viewMatrix, eye, center, up);
-  mat4.perspective(projMatrix, glMatrix.toRadian(45), canvas.width / canvas.height, 0.1, 100.0);
+  // Increase far clipping plane to 10000 to allow zooming out further.
+  mat4.perspective(projMatrix, glMatrix.toRadian(45), canvas.width / canvas.height, 0.1, 10000.0);
   
-  // Normal matrix.
   mat3.normalFromMat4(normalMatrix, modelMatrix);
   
-  // Pass matrices to the shader.
   var uModel = gl.getUniformLocation(program, "u_ModelMatrix");
   var uView = gl.getUniformLocation(program, "u_ViewMatrix");
   var uProj = gl.getUniformLocation(program, "u_ProjMatrix");
@@ -230,13 +221,11 @@ function setUniformMatrices() {
   gl.uniformMatrix4fv(uProj, false, projMatrix);
   gl.uniformMatrix3fv(uNormal, false, normalMatrix);
   
-  // Pass the camera/view position.
   var uViewPos = gl.getUniformLocation(program, "u_ViewPos");
   gl.uniform3fv(uViewPos, eye);
 }
 
 function setUniformLighting(isLightMarker) {
-  // Set lighting-related uniforms.
   var uLightPos = gl.getUniformLocation(program, "u_LightPos");
   var uLightColor = gl.getUniformLocation(program, "u_LightColor");
   var uNormalVis = gl.getUniformLocation(program, "u_NormalVis");
@@ -259,9 +248,10 @@ function renderScene() {
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   
   setUniformMatrices();
+  setUniformLighting();
   
-  // --- Draw main sphere at the origin ---
-  setUniformLighting(false);  // For the sphere, use lighting calculations.
+  // Draw main sphere at the origin.
+  setUniformLighting(false);
   var sphereModel = mat4.create();
   mat4.translate(sphereModel, sphereModel, [0, 0, 0]);
   var uModel = gl.getUniformLocation(program, "u_ModelMatrix");
@@ -272,11 +262,9 @@ function renderScene() {
   var uNormal = gl.getUniformLocation(program, "u_NormalMatrix");
   gl.uniformMatrix3fv(uNormal, false, sphereNormal);
   
-  // Draw sphere (its vertex color is set in Sphere.js, e.g. red).
   drawSphere(gl, program, 1.5, 30, 30);
   
-  // --- Draw a small cube at the light position ---
-  // Set the flag so the light marker is drawn unlit.
+  // Draw a small cube at the light position.
   setUniformLighting(true);
   var lightModel = mat4.create();
   mat4.translate(lightModel, lightModel, lightPos);
@@ -295,12 +283,15 @@ function tick() {
   var deltaTime = currentTime - lastTime;
   lastTime = currentTime;
   
-  // Animate the light in a circle (optional).
-  // Comment out or remove these lines so that the sliders control lightPos.
-  // var speed = 0.05;
-  // var angle = speed * currentTime * 0.001;
-  // lightPos[0] = 10 * Math.cos(angle);
-  // lightPos[2] = 10 * Math.sin(angle);
+  // Animate the light in a circle (affecting only X and Z) at 5x speed.
+  var speed = 0.25; // 5x quicker than the original 0.05
+  var angle = speed * currentTime * 0.001;
+  autoLightPos[0] = 10 * Math.cos(angle);
+  autoLightPos[1] = 0; // no automatic movement in Y
+  autoLightPos[2] = 10 * Math.sin(angle);
+  
+  // Combine auto movement with slider offset.
+  vec3.add(lightPos, autoLightPos, lightOffset);
   
   renderScene();
   requestAnimationFrame(tick);
@@ -324,14 +315,15 @@ function initControls() {
     elevation = Number(this.value);
   });
   
+  // Update the light offset with slider values.
   document.getElementById("lightX").addEventListener("input", function() {
-    lightPos[0] = Number(this.value);
+    lightOffset[0] = Number(this.value);
   });
   document.getElementById("lightY").addEventListener("input", function() {
-    lightPos[1] = Number(this.value);
+    lightOffset[1] = Number(this.value);
   });
   document.getElementById("lightZ").addEventListener("input", function() {
-    lightPos[2] = Number(this.value);
+    lightOffset[2] = Number(this.value);
   });
   
   document.getElementById("lightR").addEventListener("input", function() {
